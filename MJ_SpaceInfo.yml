@@ -1,0 +1,52 @@
+---
+# Documentation:
+# This Ansible playbook makes an API request to the http://api.open-notify.org/astros.json
+# to retrieve the number of people currently in space. It then displays this information.
+# The playbook is idempotent and won't run if the API request has already been made and saved.
+
+
+# Playbook: Mj_SpaceInfo.yml
+
+- name: Retrieve and display the number of people currently in space
+  hosts: localhost
+  gather_facts: no
+  vars:
+    api_url: "http://api.open-notify.org/astros.json"
+    json_file: "/tmp/astros.json"
+    result_var: "number_of_people_in_space"
+
+  tasks:
+    - name: Check if the JSON file already exists
+      stat:
+        path: "{{ json_file }}"
+      register: json_file_stat
+
+    - name: Make an API request to get the number of people in space
+      uri:
+        url: "{{ api_url }}"
+        return_content: yes
+        status_code: 200
+      register: api_result
+      when: not json_file_stat.stat.exists
+
+    - name: Save the API response to a JSON file
+      copy:
+        content: "{{ api_result.content }}"
+        dest: "{{ json_file }}"
+      when: not json_file_stat.stat.exists
+
+    - name: Load the JSON file
+      slurp:
+        src: "{{ json_file }}"
+      register: json_data
+
+    - name: Parse the JSON content and extract the number of people in space
+      set_fact:
+        "{{ result_var }}": "{{ json_data.content | b64decode | from_json | json_query('number') }}"
+
+    - name: Display the number of people currently in space
+      debug:
+        msg: "The number of people currently in space is: {{ number_of_people_in_space }}"
+
+  # Idempotency: The playbook checks if the JSON file already exists before making the API request.
+  # This prevents the API request from being made multiple times unnecessarily.
